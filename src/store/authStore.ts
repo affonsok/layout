@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { supabase } from '../lib/supabase'
+import { supabase, handleSupabaseError, checkSupabaseHealth } from '../lib/supabase'
 import type { AuthState, User, Session } from '../types'
 
 interface AuthStore extends AuthState {
@@ -22,14 +22,23 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
+      // Verificar se o Supabase está disponível
+      const isHealthy = await checkSupabaseHealth()
+      if (!isHealthy) {
+        const errorMessage = 'Serviço temporariamente indisponível. Tente novamente em alguns minutos.'
+        set({ isLoading: false, error: errorMessage })
+        return { error: errorMessage }
+      }
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       })
 
       if (error) {
-        set({ isLoading: false, error: error.message })
-        return { error: error.message }
+        const errorMessage = handleSupabaseError(error)
+        set({ isLoading: false, error: errorMessage })
+        return { error: errorMessage }
       }
 
       set({
@@ -41,7 +50,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
 
       return { error: null }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Erro no login'
+      const errorMessage = handleSupabaseError(error)
       set({ isLoading: false, error: errorMessage })
       return { error: errorMessage }
     }
@@ -51,6 +60,14 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
+      // Verificar se o Supabase está disponível
+      const isHealthy = await checkSupabaseHealth()
+      if (!isHealthy) {
+        const errorMessage = 'Serviço temporariamente indisponível. Tente novamente em alguns minutos.'
+        set({ isLoading: false, error: errorMessage })
+        return { error: errorMessage }
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -62,8 +79,9 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       })
       
       if (error) {
-        set({ isLoading: false, error: error.message })
-        return { error: error.message }
+        const errorMessage = handleSupabaseError(error)
+        set({ isLoading: false, error: errorMessage })
+        return { error: errorMessage }
       }
       
       set({
@@ -75,7 +93,7 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
       
       return { error: null }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Erro no cadastro'
+      const errorMessage = handleSupabaseError(error)
       set({ isLoading: false, error: errorMessage })
       return { error: errorMessage }
     }

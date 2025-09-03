@@ -5,6 +5,7 @@ import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 import { useAuthStore } from '../store/authStore'
 import { loginSchema, type LoginFormData } from '../lib/schemas'
 import { z } from 'zod'
+import SupabaseStatus from '../components/SupabaseStatus'
 
 export default function Login() {
   const navigate = useNavigate()
@@ -69,7 +70,9 @@ export default function Login() {
   
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <Card className="w-full max-w-md">
+      <div className="w-full max-w-md space-y-4">
+        <SupabaseStatus />
+        <Card className="w-full">
         <CardHeader className="flex flex-col gap-3 pb-6">
           <div className="flex flex-col items-center text-center">
             <h1 className="text-2xl font-bold text-gray-900">Bem-vindo de volta</h1>
@@ -167,7 +170,8 @@ export default function Login() {
             </p>
           </div>
         </CardBody>
-      </Card>
+        </Card>
+      </div>
     </div>
   )
 }
