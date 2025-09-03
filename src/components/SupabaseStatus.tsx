@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { AlertTriangle, Wifi, WifiOff } from 'lucide-react'
+import { ExclamationTriangleIcon, WifiIcon, SignalSlashIcon } from '@heroicons/react/24/outline'
 import { checkSupabaseHealth } from '../lib/supabase'
 
 interface SupabaseStatusProps {
@@ -40,14 +40,14 @@ export const SupabaseStatus: React.FC<SupabaseStatusProps> = ({ className = '' }
       <div className="flex items-center space-x-3">
         <div className="flex-shrink-0">
           {isChecking ? (
-            <Wifi className="h-5 w-5 text-yellow-600 animate-pulse" />
+            <WifiIcon className="h-5 w-5 text-yellow-600 animate-pulse" />
           ) : (
-            <WifiOff className="h-5 w-5 text-yellow-600" />
+            <SignalSlashIcon className="h-5 w-5 text-yellow-600" />
           )}
         </div>
         <div className="flex-1">
           <div className="flex items-center space-x-2">
-            <AlertTriangle className="h-4 w-4 text-yellow-600" />
+            <ExclamationTriangleIcon className="h-4 w-4 text-yellow-600" />
             <h3 className="text-sm font-medium text-yellow-800">
               Serviço Temporariamente Indisponível
             </h3>
