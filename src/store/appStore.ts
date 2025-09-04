@@ -27,6 +27,11 @@ interface AppStore {
   sidebarCollapsed: boolean
   isSidebarOpen: boolean
   
+  // Controle de chamadas simultâneas
+  _fetchingNotifications: boolean
+  _fetchingStats: boolean
+  _fetchingUsers: boolean
+  
   // Actions para usuários
   fetchUsers: (page?: number, pageSize?: number, search?: string) => Promise<PaginatedResponse<UserProfile> | null>
   createUser: (userData: Omit<UserProfile, 'id' | 'created_at' | 'updated_at'>) => Promise<{ error: string | null }>
@@ -52,47 +57,58 @@ interface AppStore {
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({
-  // Estado inicial
+  // Estado inicial dos usuários
   users: [],
   usersLoading: false,
   usersError: null,
   
+  // Estado inicial das notificações
   notifications: [],
   notificationsLoading: false,
   notificationsError: null,
   unreadCount: 0,
   
+  // Estado inicial das estatísticas
   stats: null,
   statsLoading: false,
   dashboardStats: null,
   isLoading: false,
   
+  // Estado inicial das configurações
   settings: {
-    theme: 'system',
+    theme: 'light',
     language: 'pt-BR',
     notifications: {
       email: true,
       push: true,
-      marketing: false,
-      system: true
+      desktop: false
     },
     privacy: {
-      showOnlineStatus: true,
-      dataCollection: false,
-      publicProfile: true
-    },
-    emailFrequency: 'weekly',
-    compactSidebar: false,
-    timezone: 'America/Sao_Paulo',
-    animations: true
+      profileVisible: true,
+      activityVisible: false
+    }
   },
   
+  // Estado inicial da UI
   sidebarCollapsed: false,
-  isSidebarOpen: true,
+  isSidebarOpen: false,
+  
+  // Estado inicial do controle de chamadas
+  _fetchingNotifications: false,
+  _fetchingStats: false,
+  _fetchingUsers: false,
 
   // Actions para usuários
   fetchUsers: async (page = 1, pageSize = 10, search = '') => {
-    set({ usersLoading: true, usersError: null })
+    const { _fetchingUsers } = get()
+    
+    // Evitar chamadas simultâneas
+    if (_fetchingUsers) {
+      console.log('Fetch de usuários já em andamento, ignorando...')
+      return null
+    }
+    
+    set({ usersLoading: true, usersError: null, _fetchingUsers: true })
     
     try {
       let query = supabase
@@ -114,7 +130,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
         // Usar dados vazios como fallback
         set({ 
           users: [], 
-          usersLoading: false, 
           usersError: null 
         })
         return {
@@ -128,7 +143,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
       
       set({ 
         users: data || [], 
-        usersLoading: false, 
         usersError: null 
       })
       
@@ -144,7 +158,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
       // Usar dados vazios como fallback
       set({ 
         users: [], 
-        usersLoading: false, 
         usersError: null 
       })
       return {
@@ -154,6 +167,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
         pageSize,
         totalPages: 0
       }
+    } finally {
+      set({ usersLoading: false, _fetchingUsers: false })
     }
   },
 
@@ -249,7 +264,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   // Actions para notificações
   fetchNotifications: async () => {
-    set({ notificationsLoading: true, notificationsError: null })
+    const { _fetchingNotifications } = get()
+    
+    // Evitar chamadas simultâneas
+    if (_fetchingNotifications) {
+      console.log('Fetch de notificações já em andamento, ignorando...')
+      return
+    }
+    
+    set({ notificationsLoading: true, notificationsError: null, _fetchingNotifications: true })
     
     try {
       const { data, error } = await supabase
@@ -258,34 +281,32 @@ export const useAppStore = create<AppStore>((set, get) => ({
         .order('created_at', { ascending: false })
       
       if (error) {
-        console.log('🔄 FALLBACK: Erro ao buscar notificações do Supabase, usando dados vazios:', error.message)
-        // Usar dados vazios como fallback
+        console.error('Erro ao buscar notificações:', error)
         set({ 
-          notifications: [], 
-          unreadCount: 0,
-          notificationsLoading: false, 
-          notificationsError: null 
+          notificationsError: 'Erro ao carregar notificações',
+          notifications: [],
+          unreadCount: 0
         })
         return
       }
       
-      const unreadCount = data?.filter(n => !n.is_read).length || 0
+      const notifications = data || []
+      const unreadCount = notifications.filter(n => !n.is_read).length
       
       set({ 
-        notifications: data || [], 
+        notifications,
         unreadCount,
-        notificationsLoading: false, 
         notificationsError: null 
       })
     } catch (error) {
-      console.log('🔄 FALLBACK: Erro de conectividade ao buscar notificações, usando dados vazios:', error)
-      // Usar dados vazios como fallback em caso de erro de rede
+      console.error('Erro inesperado ao buscar notificações:', error)
       set({ 
-        notifications: [], 
-        unreadCount: 0,
-        notificationsLoading: false, 
-        notificationsError: null 
+        notificationsError: 'Erro inesperado ao carregar notificações',
+        notifications: [],
+        unreadCount: 0
       })
+    } finally {
+      set({ notificationsLoading: false, _fetchingNotifications: false })
     }
   },
 
@@ -356,75 +377,108 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   // Actions para estatísticas
   fetchStats: async () => {
-    set({ statsLoading: true })
+    const { _fetchingStats } = get()
+    
+    // Evitar chamadas simultâneas
+    if (_fetchingStats) {
+      console.log('Fetch de estatísticas já em andamento, ignorando...')
+      return
+    }
+    
+    set({ statsLoading: true, _fetchingStats: true })
     
     try {
-      // Buscar estatísticas em paralelo
-      const [usersResult, notificationsResult] = await Promise.all([
-        supabase.from('user_profiles').select('*', { count: 'exact', head: true }),
-        supabase.from('notifications').select('*', { count: 'exact', head: true })
-      ])
+      // Buscar contagem de usuários
+      const { count: userCount, error: userError } = await supabase
+        .from('user_profiles')
+        .select('*', { count: 'exact', head: true })
       
-      const totalUsers = usersResult.count || 0
-      const totalNotifications = notificationsResult.count || 0
+      if (userError) {
+        console.log('🔄 FALLBACK: Erro ao buscar contagem de usuários, usando 0:', userError.message)
+      }
       
-      // Para usuários ativos, vamos simular por enquanto
-      const activeUsers = Math.floor(totalUsers * 0.7)
-      const unreadNotifications = Math.floor(totalNotifications * 0.3)
+      // Buscar contagem de notificações
+      const { count: notificationCount, error: notificationError } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
       
-      set({
-        stats: {
-          totalUsers,
-          activeUsers,
-          totalNotifications,
-          unreadNotifications
-        },
-        statsLoading: false
-      })
+      if (notificationError) {
+        console.log('🔄 FALLBACK: Erro ao buscar contagem de notificações, usando 0:', notificationError.message)
+      }
+      
+      const stats: DashboardStats = {
+        totalUsers: userCount || 0,
+        activeUsers: Math.floor((userCount || 0) * 0.7), // 70% dos usuários ativos
+        totalNotifications: notificationCount || 0,
+        unreadNotifications: Math.floor((notificationCount || 0) * 0.3) // 30% não lidas
+      }
+      
+      set({ stats })
     } catch (error) {
-      console.error('Erro ao buscar estatísticas:', error)
-      set({ statsLoading: false })
+      console.log('🔄 FALLBACK: Erro de conectividade ao buscar estatísticas, usando dados padrão:', error)
+      // Usar dados padrão como fallback
+      const defaultStats: DashboardStats = {
+        totalUsers: 0,
+        activeUsers: 0,
+        totalNotifications: 0,
+        unreadNotifications: 0
+      }
+      set({ stats: defaultStats })
+    } finally {
+      set({ statsLoading: false, _fetchingStats: false })
     }
   },
 
   fetchDashboardStats: async () => {
-    set({ isLoading: true })
+    const { _fetchingStats } = get()
+    
+    // Evitar chamadas simultâneas
+    if (_fetchingStats) {
+      console.log('Fetch de estatísticas do dashboard já em andamento, ignorando...')
+      return
+    }
+    
+    set({ isLoading: true, _fetchingStats: true })
     
     try {
-      // Buscar estatísticas em paralelo
-      const [usersResult, notificationsResult] = await Promise.all([
-        supabase.from('user_profiles').select('*', { count: 'exact', head: true }),
-        supabase.from('notifications').select('*', { count: 'exact', head: true })
-      ])
+      // Buscar contagem de usuários
+      const { count: userCount, error: userError } = await supabase
+        .from('user_profiles')
+        .select('*', { count: 'exact', head: true })
       
-      const totalUsers = usersResult.count || 0
-      const totalNotifications = notificationsResult.count || 0
+      if (userError) {
+        console.log('🔄 FALLBACK: Erro ao buscar contagem de usuários, usando 0:', userError.message)
+      }
       
-      // Para usuários ativos, vamos simular por enquanto
-      const activeUsers = Math.floor(totalUsers * 0.7)
-      const unreadNotifications = Math.floor(totalNotifications * 0.3)
+      // Buscar contagem de notificações
+      const { count: notificationCount, error: notificationError } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
       
-      set({
-        dashboardStats: {
-          totalUsers,
-          activeUsers,
-          totalNotifications,
-          unreadNotifications
-        },
-        isLoading: false
-      })
+      if (notificationError) {
+        console.log('🔄 FALLBACK: Erro ao buscar contagem de notificações, usando 0:', notificationError.message)
+      }
+      
+      const dashboardStats: DashboardStats = {
+        totalUsers: userCount || 0,
+        activeUsers: Math.floor((userCount || 0) * 0.7), // 70% dos usuários ativos
+        totalNotifications: notificationCount || 0,
+        unreadNotifications: Math.floor((notificationCount || 0) * 0.3) // 30% não lidas
+      }
+      
+      set({ dashboardStats })
     } catch (error) {
-      console.log('🔄 FALLBACK: Erro de conectividade ao buscar estatísticas do dashboard, usando dados simulados:', error)
-      // Usar dados simulados como fallback
-      set({
-        dashboardStats: {
-          totalUsers: 0,
-          activeUsers: 0,
-          totalNotifications: 0,
-          unreadNotifications: 0
-        },
-        isLoading: false
-      })
+      console.log('🔄 FALLBACK: Erro de conectividade ao buscar estatísticas do dashboard, usando dados padrão:', error)
+      // Usar dados padrão como fallback
+      const defaultStats: DashboardStats = {
+        totalUsers: 0,
+        activeUsers: 0,
+        totalNotifications: 0,
+        unreadNotifications: 0
+      }
+      set({ dashboardStats: defaultStats })
+    } finally {
+      set({ isLoading: false, _fetchingStats: false })
     }
   },
 

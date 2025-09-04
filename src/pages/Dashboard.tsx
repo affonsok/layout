@@ -29,9 +29,14 @@ export default function Dashboard() {
   } = useAppStore()
   
   useEffect(() => {
-    fetchDashboardStats()
-    fetchNotifications()
-  }, [])
+    // Debounce para evitar chamadas muito frequentes
+    const timer = setTimeout(() => {
+      fetchDashboardStats()
+      // Não buscar notificações aqui pois já são buscadas no Layout
+    }, 100)
+    
+    return () => clearTimeout(timer)
+  }, [fetchDashboardStats])
   
   const statsCards = [
     {

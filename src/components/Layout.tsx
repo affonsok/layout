@@ -15,11 +15,11 @@ export default function Layout() {
   
   useEffect(() => {
     if (user) {
-      // Carregar dados iniciais quando o usuário estiver autenticado
+      // Carregar apenas notificações no layout (dados globais)
+      // Dashboard carregará suas próprias estatísticas
       fetchNotifications()
-      fetchDashboardStats()
     }
-  }, [user, fetchNotifications, fetchDashboardStats])
+  }, [user, fetchNotifications])
   
   if (isLoading) {
     return (

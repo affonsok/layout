@@ -22,14 +22,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      // Verificar se o Supabase está disponível
-      const isHealthy = await checkSupabaseHealth()
-      if (!isHealthy) {
-        const errorMessage = 'Serviço temporariamente indisponível. Tente novamente em alguns minutos.'
-        set({ isLoading: false, error: errorMessage })
-        return { error: errorMessage }
-      }
-
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
@@ -60,14 +52,6 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     set({ isLoading: true, error: null })
     
     try {
-      // Verificar se o Supabase está disponível
-      const isHealthy = await checkSupabaseHealth()
-      if (!isHealthy) {
-        const errorMessage = 'Serviço temporariamente indisponível. Tente novamente em alguns minutos.'
-        set({ isLoading: false, error: errorMessage })
-        return { error: errorMessage }
-      }
-
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -171,7 +155,12 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
     set({ isLoading: true })
     
     try {
-      const { data: { session } } = await supabase.auth.getSession()
+      // Simplificar a chamada sem Promise.race para evitar problemas
+      const { data: { session }, error } = await supabase.auth.getSession()
+      
+      if (error) {
+        throw error
+      }
       
       if (session) {
         set({
@@ -189,8 +178,13 @@ export const useAuthStore = create<AuthStore>((set, get) => ({
         })
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Erro na inicialização'
-      set({ isLoading: false, error: errorMessage })
+      // Em caso de erro, assumir que não há sessão ativa
+      set({
+        user: null,
+        session: null,
+        isLoading: false,
+        error: null
+      })
     }
   },
 
